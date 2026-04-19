@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💬 Session 详情 - Otel Observer</title>
+    <link rel="stylesheet" th:href="@{/css/common.css}">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+    <script th:src="@{/js/common.js}"></script>
+    <th:block th:replace="~{fragments/banner :: banner-styles}"></th:block>
+</head>
+<body>
+    <div id="app" class="container">
+        <th:block th:replace="~{fragments/banner :: banner('sessions', null)}"></th:block>
+
+        <!-- Back button -->
+        <div style="margin-bottom: 20px;">
+            <a href="/sessions" class="btn btn-secondary" style="text-decoration: none;">← 返回列表</a>
+        </div>
+
+        <!-- Session Info -->
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-header">
+                <h2 class="card-title">📋 Session 信息</h2>
+            </div>
+            <div v-if="loading" class="loading">
+                <div class="spinner"></div>
+            </div>
+            <div v-else-if="session">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                    <div>
+                        <div style="color: #666; font-size: 12px; margin-bottom: 4px;">Session ID</div>
+                        <div style="font-weight: 600; word-break: break-all;">{{ session.sessionId }}</div>
+                    </div>
+                    <div>
+                        <div style="color: #666; font-size: 12px; margin-bottom: 4px;">Agent</div>
+                        <div><span class="badge badge-agent">{{ session.agentName || session.agentId || '-' }}</span></div>
+                    </div>
+                    <div>
+                        <div style="color: #666; font-size: 12px; margin-bottom: 4px;">Messages</div>
+                        <div style="font-weight: 600;">{{ formatNumber(session.messageCount) }}</div>
+                    </div>
+                    <div>
+                        <div style="color: #666; font-size: 12px; margin-bottom: 4px;">Events</div>
+                        <div style="font-weight: 600;">{{ formatNumber(session.eventCount) }}</div>
+                    </div>
+                    <div>
+                        <div style="color: #666; font-size: 12px; margin-bottom: 4px;">First Message</div>
+                        <div>{{ formatDateTime(session.firstMessageAt) }}</div>
+                    </div>
+                    <div>
+                        <div style="color: #666; font-size: 12px; margin-bottom: 4px;">Last Message</div>
+                        <div>{{ formatDateTime(session.lastMessageAt) }}</div>
+                    </div>
+                    <div v-if="session.cwd" style="grid-column: span 2;">
+                        <div style="color: #666; font-size: 12px; margin-bottom: 4px;">CWD</div>
+                        <div style="font-family: monospace;">{{ session.cwd }}</div>
+                    </div>
+                </div>
+            </div>
+            <div v-else class="empty">未找到该 Session</div>
+        </div>
+
+        <!-- Events / Messages -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">💬 事件列表</h2>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span style="font-size: 14px; color: #666;">
+                        共 {{ formatNumber(eventsTotal) }} 个事件
+                    </span>
+                    <span class="badge badge-agent" style="cursor: pointer;" @click="showOnlyMessages = !showOnlyMessages">
+                        {{ showOnlyMessages ? '只看消息' : '显示全部' }}
+                    </span>
+                </div>
+            </div>
+
+            <div v-if="eventsLoading" class="loading">
+                <div class="spinner"></div>
+            </div>
+            <div v-else>
+                <div v-if="filteredEvents.length === 0" class="empty">暂无事件</div>
+                <div v-else>
+                    <div v-for="event in filteredEvents" :key="event.id" class="message-card">
+                        <div class="message-role">
+                            <span :class="['role-badge', getEventTypeClass(event)]">
+                                {{ getEventTypeLabel(event) }}
+                            </span>
+                            <span class="message-time">{{ formatDateTime(event.eventTimestamp || event.createdAt) }}</span>
+                        </div>
+
+                        <div v-if="event.eventType === 'message' && event.messageText" class="message-content">
+                            {{ event.messageText }}
+                        </div>
+
+                        <div v-else-if="event.eventType === 'model_change'" class="message-content">
+                            <strong>Model:</strong> {{ event.modelId || '-' }}
+                            <span v-if="event.modelProvider" style="color: #666;">({{ event.modelProvider }})</span>
+                        </div>
+
+                        <div v-else-if="event.eventType === 'thinking_level_change'" class="message-content">
+                            <strong>Thinking Level:</strong> {{ event.thinkingLevel || '-' }}
+                        </div>
+
+                        <div v-else-if="event.eventType === 'custom'" class="message-content">
+                            <strong>Custom Type:</strong> {{ event.customType || '-' }}
+                            <div v-if="event.customData" style="margin-top: 10px;">
+                                <pre style="background: #f5f5f5; padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 12px;">{{ formatJson(event.customData) }}</pre>
+                            </div>
+                        </div>
+
+                        <div v-else-if="event.eventType === 'session'" class="message-content">
+                            <em>Session 开始</em>
+                        </div>
+
+                        <details style="margin-top: 12px;">
+                            <summary style="cursor: pointer; color: #667eea; font-size: 13px;">查看原始数据</summary>
+                            <pre style="margin-top: 10px; background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 11px; max-height: 300px; overflow-y: auto;">{{ formatJson(event.rawData) }}</pre>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination" v-if="eventsTotalPages > 1">
+                    <button :disabled="eventsPage === 0" @click="goToEventsPage(eventsPage - 1)">← 上一页</button>
+                    <span style="padding: 8px 16px; color: #666;">
+                        {{ eventsPage + 1 }} / {{ eventsTotalPages }}
+                    </span>
+                    <button :disabled="eventsPage >= eventsTotalPages - 1" @click="goToEventsPage(eventsPage + 1)">下一页 →</button>
+                </div>
+            </div>
+        </div>
+
+        <button class="refresh-btn" @click="loadAllData" :disabled="loading || eventsLoading" title="刷新数据">
+            {{ loading || eventsLoading ? '⟳' : '🔄' }}
+        </button>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const sessionId = window.location.pathname.split('/').pop();
+                const session = ref(null);
+                const events = ref([]);
+                const loading = ref(false);
+                const eventsLoading = ref(false);
+                const showOnlyMessages = ref(true);
+
+                const eventsPage = ref(0);
+                const eventsTotal = ref(0);
+                const eventsTotalPages = ref(1);
+                const eventsPageSize = 50;
+
+                const filteredEvents = computed(() => {
+                    if (!showOnlyMessages.value) return events.value;
+                    return events.value.filter(e => e.eventType === 'message');
+                });
+
+                const formatNumber = (num) => {
+                    if (num == null) return '0';
+                    return num.toLocaleString('zh-CN');
+                };
+
+                const formatDateTime = (date) => {
+                    if (!date) return '-';
+                    return Format.date(date);
+                };
+
+                const formatJson = (data) => {
+                    if (!data) return '';
+                    if (typeof data === 'string') {
+                        try {
+                            data = JSON.parse(data);
+                        } catch (e) {
+                            return data;
+                        }
+                    }
+                    return JSON.stringify(data, null, 2);
+                };
+
+                const getEventTypeClass = (event) => {
+                    switch (event.eventType) {
+                        case 'message':
+                            if (event.messageRole === 'user') return 'role-user';
+                            if (event.messageRole === 'assistant') return 'role-assistant';
+                            if (event.messageRole === 'system') return 'role-system';
+                            if (event.messageRole === 'tool') return 'role-tool';
+                            return 'role-assistant';
+                        case 'model_change':
+                            return 'badge-channel';
+                        case 'thinking_level_change':
+                            return 'badge-agent';
+                        case 'custom':
+                            return 'badge-log';
+                        default:
+                            return 'role-system';
+                    }
+                };
+
+                const getEventTypeLabel = (event) => {
+                    switch (event.eventType) {
+                        case 'message':
+                            return event.messageRole || 'message';
+                        case 'model_change':
+                            return 'model change';
+                        case 'thinking_level_change':
+                            return 'thinking level';
+                        case 'custom':
+                            return event.customType || 'custom';
+                        case 'session':
+                            return 'session';
+                        default:
+                            return event.eventType || 'event';
+                    }
+                };
+
+                const loadSession = async () => {
+                    loading.value = true;
+                    try {
+                        const data = await Api.get('/api/sessions/' + sessionId);
+                        session.value = data;
+                    } catch (error) {
+                        console.error('Failed to load session:', error);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const loadEvents = async () => {
+                    eventsLoading.value = true;
+                    try {
+                        const data = await Api.get('/api/sessions/' + sessionId + '/events', {
+                            page: eventsPage.value,
+                            size: eventsPageSize
+                        });
+                        events.value = data.items || [];
+                        eventsTotal.value = data.total || 0;
+                        eventsTotalPages.value = Math.ceil(eventsTotal.value / eventsPageSize);
+                    } catch (error) {
+                        console.error('Failed to load events:', error);
+                    } finally {
+                        eventsLoading.value = false;
+                    }
+                };
+
+                const goToEventsPage = (page) => {
+                    if (page >= 0 && page < eventsTotalPages.value) {
+                        eventsPage.value = page;
+                        loadEvents();
+                    }
+                };
+
+                const loadAllData = () => {
+                    loadSession();
+                    loadEvents();
+                };
+
+                onMounted(() => {
+                    loadAllData();
+                });
+
+                return {
+                    session,
+                    events,
+                    filteredEvents,
+                    loading,
+                    eventsLoading,
+                    showOnlyMessages,
+                    eventsPage,
+                    eventsTotal,
+                    eventsTotalPages,
+                    formatNumber,
+                    formatDateTime,
+                    formatJson,
+                    getEventTypeClass,
+                    getEventTypeLabel,
+                    loadAllData,
+                    goToEventsPage
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <!-- Banner Fragment -->
+    <div th:fragment="banner(currentPage, extraContent)" class="banner-container">
+        <div class="banner">
+            <div class="banner-content">
+                <div class="banner-brand">
+                    <span class="banner-logo">🦐</span>
+                    <div class="banner-text">
+                        <span class="banner-title">Otel Observer</span>
+                        <span class="banner-subtitle">OpenClaw 可观测性后台</span>
+                    </div>
+                </div>
+                <nav class="banner-nav">
+                    <a th:href="@{/}" 
+                       th:class="${currentPage == 'index' ? 'active' : ''}"
+                       class="nav-item">
+                        <span class="nav-icon">📊</span>
+                        <span class="nav-text">首页</span>
+                    </a>
+                    <a th:href="@{/sessions}" 
+                       th:class="${currentPage == 'sessions' ? 'active' : ''}"
+                       class="nav-item">
+                        <span class="nav-icon">💬</span>
+                        <span class="nav-text">Sessions</span>
+                    </a>
+                    <a th:href="@{/traces}" 
+                       th:class="${currentPage == 'traces' ? 'active' : ''}"
+                       class="nav-item">
+                        <span class="nav-icon">🔗</span>
+                        <span class="nav-text">Traces</span>
+                    </a>
+                    <a th:href="@{/metrics}" 
+                       th:class="${currentPage == 'metrics' ? 'active' : ''}"
+                       class="nav-item">
+                        <span class="nav-icon">📈</span>
+                        <span class="nav-text">Metrics</span>
+                    </a>
+                    <a th:href="@{/logs}" 
+                       th:class="${currentPage == 'logs' ? 'active' : ''}"
+                       class="nav-item">
+                        <span class="nav-icon">📝</span>
+                        <span class="nav-text">Logs</span>
+                    </a>
+                </nav>
+            </div>
+        </div>
+        <div th:if="${extraContent != null}" class="banner-extra" th:utext="${extraContent}"></div>
+    </div>
+
+    <!-- Banner Styles -->
+    <th:block th:fragment="banner-styles">
+    <style>
+        /* Global link reset for banner */
+        .banner-nav a,
+        .banner-nav a:link,
+        .banner-nav a:visited,
+        .banner-nav a:hover,
+        .banner-nav a:active {
+            text-decoration: none !important;
+            border-bottom: none !important;
+            outline: none !important;
+        }
+        
+        .banner-container {
+            margin-bottom: 24px;
+        }
+        .banner {
+            background: linear-gradient(135deg, #fafbfc 0%, #f0f4f8 50%, #f7f5ff 100%);
+            border-radius: 20px;
+            padding: 24px 32px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(15, 23, 42, 0.06);
+        }
+        .banner::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+            animation: shimmer 8s infinite;
+        }
+        @keyframes shimmer {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(-30%, -30%); }
+        }
+        .banner-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .banner-brand {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .banner-logo {
+            font-size: 42px;
+            filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.2));
+            animation: bounce 2s ease-in-out infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+        .banner-text {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .banner-title {
+            color: #0f172a;
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+        .banner-subtitle {
+            color: #64748b;
+            font-size: 15px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+        .banner-nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .nav-item,
+        .nav-item:link,
+        .nav-item:visited,
+        .nav-item:hover,
+        .nav-item:active,
+        .nav-item:focus {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: #f1f5f9;
+            color: #3b82f6 !important;
+            text-decoration: none !important;
+            border-bottom: none !important;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            outline: none !important;
+        }
+        .nav-item:hover {
+            background: #e0f2fe;
+            color: #0369a1 !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.25);
+        }
+        .nav-item:active {
+            transform: translateY(0);
+        }
+        .nav-item.active,
+        .nav-item.active:link,
+        .nav-item.active:visited,
+        .nav-item.active:hover,
+        .nav-item.active:active {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white !important;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+            border-color: transparent;
+        }
+        .nav-icon {
+            font-size: 18px;
+        }
+        .banner-extra {
+            background: white;
+            border-radius: 16px;
+            padding: 18px 28px;
+            margin-top: 16px;
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.1);
+        }
+        @media (max-width: 1024px) {
+            .banner-content {
+                gap: 16px;
+            }
+            .banner-nav {
+                gap: 8px;
+            }
+            .nav-item {
+                padding: 10px 16px;
+                font-size: 13px;
+            }
+        }
+        @media (max-width: 768px) {
+            .banner {
+                padding: 20px;
+                border-radius: 16px;
+            }
+            .banner-logo {
+                font-size: 36px;
+            }
+            .banner-title {
+                font-size: 22px;
+            }
+            .banner-subtitle {
+                font-size: 13px;
+            }
+            .nav-text {
+                display: none;
+            }
+            .nav-item {
+                padding: 12px 14px;
+            }
+        }
+    </style>
+    </th:block>
+</body>
+</html>

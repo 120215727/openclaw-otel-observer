@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🦐 Otel Observer - OpenClaw 可观测性</title>
+    <link rel="stylesheet" th:href="@{/css/common.css}">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <script th:src="@{/js/common.js}"></script>
+    <th:block th:replace="~{fragments/banner :: banner-styles}"></th:block>
+</head>
+<body>
+    <div id="app" class="container">
+        <th:block th:replace="~{fragments/banner :: banner('index', null)}"></th:block>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ formatNumber(stats.sessionCount) }}</div>
+                <div class="stat-label">💬 Session 总数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ formatNumber(stats.traceCount) }}</div>
+                <div class="stat-label">🔗 Trace 总数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ formatNumber(stats.metricCount) }}</div>
+                <div class="stat-label">📈 Metric 总数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ formatNumber(stats.logCount) }}</div>
+                <div class="stat-label">📝 Log 总数</div>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="content-grid" style="margin-bottom: 20px;">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">📊 日志级别分布</h2>
+                </div>
+                <div ref="logLevelChart" class="chart-container small"></div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">🔥 最近24小时活跃</h2>
+                </div>
+                <div ref="activityChart" class="chart-container small"></div>
+            </div>
+        </div>
+
+        <!-- Recent Data -->
+        <div class="content-grid">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">🔗 最近 Traces</h2>
+                    <a href="/traces" class="btn btn-secondary" style="text-decoration: none;">查看全部 →</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Span</th>
+                                <th>Status</th>
+                                <th>耗时</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="recentTraces.length === 0">
+                                <td colspan="5" class="empty">暂无数据</td>
+                            </tr>
+                            <tr v-for="trace in recentTraces" :key="trace.id">
+                                <td><span class="badge badge-trace">{{ trace.serviceName || '-' }}</span></td>
+                                <td>{{ truncate(trace.spanName, 30) }}</td>
+                                <td>
+                                    <span :class="['badge', getStatusBadgeClass(trace.statusCode)]">
+                                        {{ trace.statusCode || '-' }}
+                                    </span>
+                                </td>
+                                <td>{{ trace.durationMs != null ? trace.durationMs + 'ms' : '-' }}</td>
+                                <td>{{ formatTime(trace.createdAt) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">📈 最近 Metrics</h2>
+                    <a href="/metrics" class="btn btn-secondary" style="text-decoration: none;">查看全部 →</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Type</th>
+                                <th>Value</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="recentMetrics.length === 0">
+                                <td colspan="4" class="empty">暂无数据</td>
+                            </tr>
+                            <tr v-for="metric in recentMetrics" :key="metric.id">
+                                <td><span class="badge badge-metric">{{ metric.metricName || '-' }}</span></td>
+                                <td>{{ metric.metricType || '-' }}</td>
+                                <td>{{ formatMetricValue(metric) }}</td>
+                                <td>{{ formatTime(metric.createdAt) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card col-span-2">
+                <div class="card-header">
+                    <h2 class="card-title">📝 最近 Logs</h2>
+                    <a href="/logs" class="btn btn-secondary" style="text-decoration: none;">查看全部 →</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Level</th>
+                                <th>Message</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="recentLogs.length === 0">
+                                <td colspan="4" class="empty">暂无数据</td>
+                            </tr>
+                            <tr v-for="log in recentLogs" :key="log.id">
+                                <td>{{ log.serviceName || '-' }}</td>
+                                <td>
+                                    <span :class="['badge', getLogBadgeClass(log.logLevel)]">
+                                        {{ log.logLevel || '-' }}
+                                    </span>
+                                </td>
+                                <td>{{ truncate(log.message, 80) }}</td>
+                                <td>{{ formatTime(log.createdAt) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <button class="refresh-btn" @click="loadData" :disabled="loading" title="刷新数据">
+            {{ loading ? '⟳' : '🔄' }}
+        </button>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const stats = ref({
+                    sessionCount: 0,
+                    traceCount: 0,
+                    metricCount: 0,
+                    logCount: 0
+                });
+                const recentTraces = ref([]);
+                const recentMetrics = ref([]);
+                const recentLogs = ref([]);
+                const loading = ref(false);
+                const logLevelChart = ref(null);
+                const activityChart = ref(null);
+                let logLevelChartInstance = null;
+                let activityChartInstance = null;
+
+                const formatNumber = (num) => {
+                    if (num == null) return '0';
+                    return num.toLocaleString('zh-CN');
+                };
+
+                const formatTime = (date) => {
+                    if (!date) return '-';
+                    return Format.time(date);
+                };
+
+                const truncate = (str, maxLen) => {
+                    if (!str) return '-';
+                    return str.length > maxLen ? str.substring(0, maxLen) + '...' : str;
+                };
+
+                const formatMetricValue = (metric) => {
+                    if (metric.valueDouble != null) return metric.valueDouble;
+                    if (metric.valueLong != null) return metric.valueLong;
+                    if (metric.valueInt != null) return metric.valueInt;
+                    return '-';
+                };
+
+                const getStatusBadgeClass = (status) => {
+                    if (!status) return 'badge-trace';
+                    const s = status.toUpperCase();
+                    if (s === 'OK' || s === 'UNSET') return 'badge-metric';
+                    if (s === 'ERROR') return 'badge-log-error';
+                    return 'badge-trace';
+                };
+
+                const getLogBadgeClass = (level) => {
+                    if (!level) return 'badge-log';
+                    const l = level.toUpperCase();
+                    if (l === 'ERROR') return 'badge-log-error';
+                    if (l === 'WARN' || l === 'WARNING') return 'badge-log-warn';
+                    if (l === 'INFO') return 'badge-log-info';
+                    if (l === 'DEBUG') return 'badge-log-debug';
+                    return 'badge-log';
+                };
+
+                const loadData = async () => {
+                    loading.value = true;
+                    try {
+                        const [dashboardData, tracesData, metricsData, logsData] = await Promise.all([
+                            Api.get('/api/stats/dashboard'),
+                            Api.get('/api/traces', { page: 0, size: 10 }),
+                            Api.get('/api/metrics', { page: 0, size: 10 }),
+                            Api.get('/api/logs', { page: 0, size: 10 })
+                        ]);
+
+                        stats.value = {
+                            sessionCount: dashboardData.sessionCount || 0,
+                            traceCount: dashboardData.traceCount || 0,
+                            metricCount: dashboardData.metricCount || 0,
+                            logCount: dashboardData.logCount || 0
+                        };
+
+                        recentTraces.value = tracesData.items || [];
+                        recentMetrics.value = metricsData.items || [];
+                        recentLogs.value = logsData.items || [];
+
+                        await nextTick();
+                        renderLogLevelChart(dashboardData.logLevels || {});
+                        renderActivityChart(dashboardData.recentActivity || {});
+                    } catch (error) {
+                        console.error('Failed to load data:', error);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const renderLogLevelChart = (logLevels) => {
+                    if (!logLevelChart.value) return;
+                    if (logLevelChartInstance) {
+                        logLevelChartInstance.dispose();
+                    }
+
+                    const data = Object.entries(logLevels)
+                        .filter(([_, count]) => count > 0)
+                        .map(([name, count]) => ({ name, value: count }));
+
+                    if (data.length === 0) {
+                        data.push({ name: '暂无数据', value: 1 });
+                    }
+
+                    logLevelChartInstance = Charts.pieChart(logLevelChart.value, {
+                        name: '日志级别',
+                        data: data
+                    }, {
+                        color: ['#2563eb', '#d97706', '#dc2626', '#6b7280']
+                    });
+                };
+
+                const renderActivityChart = (activity) => {
+                    if (!activityChart.value) return;
+                    if (activityChartInstance) {
+                        activityChartInstance.dispose();
+                    }
+
+                    const data = {
+                        xAxis: ['Traces', 'Logs', 'Metrics'],
+                        series: [{
+                            name: '24小时',
+                            data: [
+                                activity.traces24h || 0,
+                                activity.logs24h || 0,
+                                activity.metrics24h || 0
+                            ]
+                        }]
+                    };
+
+                    activityChartInstance = Charts.barChart(activityChart.value, data);
+                };
+
+                onMounted(() => {
+                    loadData();
+                    setInterval(loadData, 30000);
+                });
+
+                return {
+                    stats,
+                    recentTraces,
+                    recentMetrics,
+                    recentLogs,
+                    loading,
+                    logLevelChart,
+                    activityChart,
+                    formatNumber,
+                    formatTime,
+                    truncate,
+                    formatMetricValue,
+                    getStatusBadgeClass,
+                    getLogBadgeClass,
+                    loadData
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
